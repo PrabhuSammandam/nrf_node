@@ -12,7 +12,7 @@
 #include <avr/io.h>
 #include <avr/sfr_defs.h>
 #include <avr/pgmspace.h>
-#include "compiler.h"
+#include "utils/compiler.h"
 
 extern const uint16_t PROGMEM port_to_mode_table[];
 extern const uint16_t PROGMEM port_to_output_table[];

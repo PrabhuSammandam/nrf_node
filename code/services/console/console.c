@@ -6,7 +6,7 @@
  */ 
  #include <avr/io.h>
  #include "console.h"
- #include "uart.h"
+ #include "serial/uart.h"
 
 void console_print_byte(uint8_t data)
 {

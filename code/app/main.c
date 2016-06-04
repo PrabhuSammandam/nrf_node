@@ -9,15 +9,15 @@
 #include <util/delay.h>
 #include <stdio.h>
 #include <avr/interrupt.h>
-#include "io_port.h"
-#include "uart.h"
-#include "tick_timer.h"
+#include "ioport/io_port.h"
+#include "serial/uart.h"
+#include "tick_timer/tick_timer.h"
 #include "nrf24_hal.h"
 #include "nrf24_link_layer.h"
-#include "spi.h"
-#include "console.h"
-#include "interrupt.h"
-#include "delay_cycle.h"
+#include "spi/spi.h"
+#include "console/console.h"
+#include "utils/interrupt.h"
+#include "delay/delay_cycle.h"
 
 #define LED_RELAY          IOPORT_CREATE_PIN(PORT_C, 5)
 #define LED_YELLOW          IOPORT_CREATE_PIN(PORT_C, 3)

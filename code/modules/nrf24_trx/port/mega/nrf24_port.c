@@ -1,9 +1,9 @@
 #include <avr/io.h>
 #include <avr/sfr_defs.h>
 #include <util/delay.h>
-#include "io_port.h"
-#include "spi.h"
-#include "tick_timer.h"
+#include "ioport/io_port.h"
+#include "spi/spi.h"
+#include "tick_timer/tick_timer.h"
 
 #include "nrf24_port.h"
 

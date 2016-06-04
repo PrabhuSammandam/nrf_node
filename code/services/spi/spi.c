@@ -6,7 +6,7 @@
 */
 #include <avr/io.h>
 #include <avr/sfr_defs.h>
-#include "io_port.h"
+#include "ioport/io_port.h"
 #include "spi.h"
 
 #if defined(__AVR_ATmega8__) || defined(__AVR_ATmega328__) || defined(__AVR_ATmega328P__)
