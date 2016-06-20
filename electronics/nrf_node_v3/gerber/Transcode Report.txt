@@ -1,0 +1,27 @@
+
+
+   ---- Transcoding 'C:\drive\GitHub\nrf_node\electronics\nrf_node_v3\gerber\nrf_node_v3-Edge.Cuts.gbr' ----   Mon Jun 20 09:15:31 2016
+
+D11   --> D100
+-----------------------------------------------------------------
+
+
+   ---- Transcoding 'C:\drive\GitHub\nrf_node\electronics\nrf_node_v3\gerber\nrf_node_v3-B.Mask.gbr' ----   Mon Jun 20 09:16:26 2016
+
+D11   --> D101
+D12   --> D102
+D13   --> D103
+D14   --> D104
+D15   --> D105
+D16   --> D106
+D17   --> D107
+D18   --> D108
+D19   --> D109
+D20   --> D110
+D21   --> D111
+D22   --> D112
+D23   --> D113
+D24   --> D114
+D25   --> D115
+D26   --> D116
+-----------------------------------------------------------------

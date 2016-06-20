@@ -19,6 +19,9 @@
 #include "utils/interrupt.h"
 #include "delay/delay_cycle.h"
 
+static int uart_putchar (char c, FILE *stream);
+static void init_debug_prints();
+
 #define LED_RELAY          IOPORT_CREATE_PIN(PORT_C, 5)
 #define LED_YELLOW          IOPORT_CREATE_PIN(PORT_C, 3)
 #define LED_GREEN           IOPORT_CREATE_PIN(PORT_C, 2)
@@ -37,20 +40,13 @@ uint8_t enabled = 0xFF;
 uint8_t dst_addr[5] = { 0x01, 0x00, 0xFF, 0xFF, 0xE7 };
 uint8_t node_addr[5] = {0x01, 0x00, 0xFF,  0xFF, 0xE7 };
 
-static int uart_putchar (char c, FILE *stream)
-{
-    uart_putc(c);
-    return 0 ;
-}
-
-#if 1
 int main()
 {
     timer_init();
     uart_init(UART_BAUD_RATE);
+    spi_init();
 
-    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
-    stdout = &uartout ;
+    init_debug_prints();
 
     cpu_irq_enable();
 
@@ -59,12 +55,18 @@ int main()
     io_port_set_pin_output(LED_DIGITAL_13);
     io_port_set_pin_output(LED_RELAY);
 
+    nrf24_link_init();
+    nrf24_link_set_pan_id(0x0010);
+    nrf24_link_set_nwk_id(0x0001);
+
     while(1)
     {
+        nrf24_hal_print_details(1);
         io_port_toggle_pin(LED_GREEN);
         io_port_toggle_pin(LED_YELLOW);
         //io_port_toggle_pin(LED_DIGITAL_13);
         printf_P(PSTR("Hello World\n"));
+
         delay_ms(1000);
 
         if(count++ > 15)
@@ -74,7 +76,18 @@ int main()
         }
     }
 }
-#endif
+
+static int uart_putchar (char c, FILE *stream)
+{
+    uart_putc(c);
+    return 0 ;
+}
+
+static void init_debug_prints()
+{
+    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
+    stdout = &uartout ;
+}
 #if 0
 int main()
 {
