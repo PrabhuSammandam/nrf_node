@@ -18,267 +18,197 @@
 #include "console/console.h"
 #include "utils/interrupt.h"
 #include "delay/delay_cycle.h"
+#include "utils/compiler.h"
+#include "nrf24_hal.h"
+#include "nrf24l01.h"
+#include "nrf24_port.h"
+#include "nrf24_params.h"
+#include "gpio/gpio.h"
 
-static int uart_putchar (char c, FILE *stream);
-static void init_debug_prints();
+#define TRANSMITTER
+#define RECEIVER
 
-#define LED_RELAY          IOPORT_CREATE_PIN(PORT_C, 5)
-#define LED_YELLOW          IOPORT_CREATE_PIN(PORT_C, 3)
-#define LED_GREEN           IOPORT_CREATE_PIN(PORT_C, 2)
-#define LED_DIGITAL_13           IOPORT_CREATE_PIN(PORT_B, 5)
-#define LED_ARDUINO     IOPORT_CREATE_PIN(PORT_B, 5)
+#define IS_BIT_CLEAR(_V_, _B_)  ((_V_ & (_BV(_B_))) == 0)
+#define IS_BIT_SET(_V_, _B_)    ((_V_ & (_BV(_B_))) != 0)
 
+static int  uart_putchar(char c, FILE* stream);
+static void init_debug_prints(void);
+static void run_as_transmitter(void);
+static void run_as_receiver(void);
 
-uint8_t count = 0;
+#define LED_GREEN       IOPORT_CREATE_PIN(PORT_D, 3)
+#define RELAY_PIN       IOPORT_CREATE_PIN(PORT_D, 4)
+
+#define SWITCH_ON_PIN   IOPORT_CREATE_PIN(PORT_D, 4)
+#define SWITCH_OFF_PIN  IOPORT_CREATE_PIN(PORT_D, 5)
+
+#define MOTION_PIN  IOPORT_CREATE_PIN(PORT_D, 5)
 
 #define UART_BAUD_RATE  115200
 
 static FILE uartout;
 
-uint8_t rx_buffer[32];
-uint8_t enabled = 0xFF;
-uint8_t dst_addr[5] = { 0x01, 0x00, 0xFF, 0xFF, 0xE7 };
-uint8_t node_addr[5] = {0x01, 0x00, 0xFF,  0xFF, 0xE7 };
-
-int main()
+void board_init(void)
 {
     timer_init();
     uart_init(UART_BAUD_RATE);
     spi_init();
-
     init_debug_prints();
-
     cpu_irq_enable();
-
-    io_port_set_pin_output(LED_GREEN);
-    io_port_set_pin_output(LED_YELLOW);
-    io_port_set_pin_output(LED_DIGITAL_13);
-    io_port_set_pin_output(LED_RELAY);
-
     nrf24_link_init();
-    nrf24_link_set_pan_id(0x0010);
-    nrf24_link_set_nwk_id(0x0001);
 
-    while(1)
-    {
-        nrf24_hal_print_details(1);
-        io_port_toggle_pin(LED_GREEN);
-        io_port_toggle_pin(LED_YELLOW);
-        //io_port_toggle_pin(LED_DIGITAL_13);
-        printf_P(PSTR("Hello World\n"));
+    gpio_set_pin_output(LED_GREEN);
+}
 
-        delay_ms(1000);
+uint8_t get_key(void)
+{
+    if(io_port_is_pin_low(SWITCH_OFF_PIN)) {
+        delay_ms(25);
 
-        if(count++ > 15)
-        {
-            count = 0;
-            //io_port_toggle_pin(LED_RELAY);
+        if(io_port_is_pin_low(SWITCH_OFF_PIN)) {
+            return 0;
         }
     }
-}
 
-static int uart_putchar (char c, FILE *stream)
-{
-    uart_putc(c);
-    return 0 ;
-}
+    if(io_port_is_pin_low(SWITCH_ON_PIN)) {
+        delay_ms(25);
 
-static void init_debug_prints()
-{
-    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
-    stdout = &uartout ;
-}
-#if 0
-int main()
-{
-    uint8_t value = 0;
-
-    timer_init();
-    uart_init(UART_BAUD_RATE);
-    spi_init();
-    fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
-    stdout = &uartout ;
-
-    cpu_irq_enable();
-
-    delay_ms(5000);
-
-    nrf24_link_init();
-    nrf24_link_set_pan_id(0x0010);
-    nrf24_link_set_nwk_id(0x0001);
-
-    //nrf24_hal_print_details(1);
-
-    //value = nrf24_link_tx_data(0x0010, 0x0002, rx_buffer, 1, NRF24_LL_UNICAST, NRF24_LL_NO_TIMEOUT);
-    //printf_P(PSTR("Transmit status %d\n"), value);
-
-    while(1)
-    {
-        delay_ms(5000);
+        if(io_port_is_pin_low(SWITCH_ON_PIN)) {
+            return 1;
+        }
     }
+
+    return 0xFF;
 }
-#endif
-#if 0
+
 int main(void)
 {
-    uint8_t rx_length;
-    uint8_t rx_pipe;
 
-    timer_init();
-    uart_init(UART_BAUD_RATE);
-    spi_init();
+    board_init();
 
-    cpu_irq_enable();
+#ifdef TRANSMITTER
+    run_as_transmitter();
 
-    nrf24_link_init();
+#else
+    run_as_receiver();
+#endif
+}
 
-    while(1) {
-        if(enabled == 1) {
-            //uint32_t    time_millis = timer_millis();
-            if(!nrf24_link_rx_fifo_read(&rx_buffer[0], &rx_length, &rx_pipe)) {
-                uart_puts_P("Received Data in Node 1\n");
-            }
-            else
-            {
-                delay_ms(1000);
-                uart_puts_P("No Data received in Node 1\n");
-            }
-        }
+static void run_as_transmitter(void)
+{
+    uint8_t led_display_count = 0;
+    uint8_t count = 0;
+    uint8_t status;
 
-        if(enabled == 2) {
-            uint32_t    time_millis = timer_millis();
-            uint8_t     status;
+    gpio_set_pin_input(SWITCH_ON_PIN);
+    gpio_set_pin_input(SWITCH_OFF_PIN);
 
-            //if(!nrf24_link_rx_fifo_read(&rx_buffer[0], &rx_length, &rx_pipe)) {
-            //    uart_puts_P("Received Data in Node 2\n");
-            //}
-            dst_addr[0] = 0x01;
+	/* enable internal pull up*/
+    gpio_set_pin_high(SWITCH_ON_PIN);
+    gpio_set_pin_high(SWITCH_OFF_PIN);
 
-            uart_puts_P("sending data\n");
-            status = nrf24_link_tx_data(&dst_addr[0], (const uint8_t*) &time_millis, sizeof(uint32_t), NRF24_LL_UNICAST, NRF24_LL_NO_TIMEOUT);
+    nrf24_link_set_pan_id(0x0001);
+    nrf24_link_set_nwk_id(0x0001);
 
-            //uart_puts_P("getting status\n");
-            //status = nrf24_link_block_get_tx_status();
+    count = 0xFF;
+    nrf24_hal_print_details(1);
 
-            //uart_puts_P("starting receiver\n");
-            //nrf24_link_rx_start();
-
-            if(status) {
-                uart_puts_P("Failed to send to node 2\n");
-            }
-            else
-            {
-                uart_puts_P("sent success\n");
-            }
-            delay_ms(1000);
-        }
-
+    while(1)
+    {
+#if 0
         if(uart_available()) {
             uint8_t ch = uart_getc() & 0xFF;
 
-            if(ch == '1') {
-                enabled = 1;
-                dst_addr[0] = 0x01;
-
-                nrf24_link_set_node_address(&dst_addr[0]);
-                nrf24_link_rx_start();
-
-                uart_puts_P("Enabled Node 1\n");
+            if(ch == '0') {
+                count = 0;
+                printf_P(PSTR("relay off\n"));
             }
-            else if(ch == '2') {
-                enabled = 2;
-                dst_addr[0] = 0x02;
-
-                nrf24_link_set_node_address(&dst_addr[0]);
-                nrf24_link_rx_start();
-
-                uart_puts_P("Enabled Node 2\n");
+            else if(ch == '1') {
+                count = 1;
+                printf_P(PSTR("relay on\n"));
             }
+        }
+#endif
+
+        count = get_key();
+
+        if(count != 0xFF) {
+            uint8_t success = nrf24_link_tx_data(0x0001, 0x0002, &count, sizeof(uint8_t), NRF24_LL_UNICAST, NRF24_LL_NO_TIMEOUT);
+
+            if(!success) {
+                printf_P(PSTR("ds, count %d\n"), count);
+            }
+
+            count = 0xFF;
+        }
+
+        delay_ms(1);
+
+        led_display_count++;
+
+        if(led_display_count > 200) {
+            led_display_count = 0;
+            gpio_toggle_pin(LED_GREEN);
         }
     }
 }
-#endif
 
-#if 0
-int main(void)
+static void run_as_receiver(void)
 {
-    #if 0
-    io_port_set_pin_output(LED_ARDUINO);
+    uint8_t led_display_count = 0;
+    uint8_t count = 0;
+    uint8_t status;
 
-    while(1) {
-        io_port_toggle_pin(LED_ARDUINO);
-        _delay_ms(100);
-    }
-    #endif
+    gpio_set_pin_output(RELAY_PIN);
+    gpio_set_pin_low(RELAY_PIN);
 
-    #if 1
-    timer_init();
-    uart_init( /*UART_BAUD_SELECT(250000, F_CPU)*/ 250000);
-
-    io_port_set_pin_output(LED_1);
-
-    sei();
-
-    uint32_t    milli_last = timer_millis();
-
-    while(1) {
-        _delay_ms(990);
-        io_port_toggle_pin(LED_1);
-
-        uart_puts_P("Hello World");
-        milli_last = timer_millis();
-
-        //console_print_long(milli_last);
-        uart_putc('\n');
-
-        while(uart_available() != 0) {
-            uint8_t received_byte = (uint8_t) uart_getc();
-
-            uart_putc(received_byte);
-
-            //if(received_byte == 'a')
-            //{
-            //	uart_puts("received byte");
-            //}
-        }
-
-        //uart_puts_P("Hello World\n");
-    }
-    #endif
-
-    #if 0
-    uint8_t         tx_status;
-    uint8_t         pipe;
-    uint8_t         length;
-    uint8_t         buffer[NRF24_LL_MAX_FW_PAYLOAD_LENGTH];
-
-    const uint8_t   node_address[NRF24_LL_ADDRESS_WIDTH] = { 0xe7, 0xff, 0xff, 0x00, 0x01 };
-    const uint8_t   dst_address[NRF24_LL_ADDRESS_WIDTH] = { 0xe7, 0xff, 0xff, 0x00, 0x02 };
-
-    timer_init();
-    uart_init(UART_BAUD_SELECT(250000, F_CPU));
-    spi_init();
-
-    sei();
-
-    nrf24_link_init();
-
-    nrf24_link_set_node_address(&node_address[0]);
+    nrf24_link_set_pan_id(0x0001);
+    nrf24_link_set_nwk_id(0x0002);
 
     nrf24_link_rx_start();
 
-    PHY_Init();
+    //CE_HIGH();
+    nrf24_hal_print_details(1);
 
     while(1) {
-        if(nrf24_link_rx_fifo_read(&buffer[0], &length, &pipe)) {
+        if(!nrf24_hal_is_rx_fifo_empty()) {
+            nrf24_write_register(STATUS_REG, (_BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT)));
+
+            //nrf24_hal_flush_rx_fifo();
+            nrf24_hal_read_rx_payload(&count);
+            printf_P(PSTR("data received %d\n"), count);
+
+            if(count == 0) {
+                gpio_set_pin_low(RELAY_PIN);
+            }
+            else if(count == 1) {
+                gpio_set_pin_high(RELAY_PIN);
+            }
         }
 
-        timer_delay_ms(1000);
+#if 0
+        delay_ms(1);
+        led_display_count++;
 
-        *((uint32_t*) &buffer[0]) = timer_millis();
-
-        tx_status = nrf24_link_tx_data(&dst_address[0], &buffer[0], sizeof(uint32_t), NRF24_LL_UNICAST, NRF24_LL_NO_TIMEOUT);
-    }
-    #endif
-}
+        if(led_display_count > 200) {
+            led_display_count = 0;
+            gpio_toggle_pin(LED_GREEN);
+        }
 #endif
+
+        //gpio_toggle_pin(RELAY_PIN);
+    }
+}
+
+static int uart_putchar(char    c,
+                        FILE*   stream)
+{
+    uart_putc(c);
+    return 0;
+}
+
+static void init_debug_prints(void)
+{
+    fdev_setup_stream(&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
+    stdout = &uartout;
+}

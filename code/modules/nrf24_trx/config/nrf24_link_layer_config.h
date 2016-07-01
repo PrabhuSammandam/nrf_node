@@ -14,10 +14,9 @@ is normally improved since shorter time on air reduces the risk of collisions.
 A low data rate increases the receiver sensitivity, which will increase
 the maximum range of the radio link.
 */
-#define NRF24_LL_CONFIG_DATA_RATE_2MBPS
-
+//#define NRF24_LL_CONFIG_DATA_RATE_2MBPS
 //#define NRF24_LL_CONFIG_DATA_RATE_1MBPS
-//#define NRF24_LL_CONFIG_DATA_RATE_250KBPS
+#define NRF24_LL_CONFIG_DATA_RATE_250KBPS
 /*
 NRF24_LL_CONFIG_CRYTO_ENABLE must be defined in order to use encryption at all.
 */

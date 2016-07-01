@@ -67,19 +67,26 @@ void nrf24_link_init(void)
 
     nrf24_hal_init();
 
-    nrf24_hal_chip_enable_low();
+    CE_LOW();
     nrf24_hal_power_up();
 
-    nrf24_intl_write_register(FEATURE_REG, (_BV(EN_DPL) | _BV(EN_DYN_ACK)));
-    nrf24_intl_write_register(DYNAMIC_PAYLOAD_ENABLE_REG, 0x3F);
-    nrf24_intl_write_register(SETUP_ADDRESS_WIDTH_REG, NRF24_LL_ADDRESS_WIDTH - 2);
-    nrf24_intl_write_register(RF_CHANNEL_REG, NRF24_LL_DEFAULT_CHANNEL);
-    nrf24_intl_write_register(RF_SETUP_REG, (NRF24_LL_HAL_DATARATE | ((uint8_t) g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER]) ));
+    /*enable dynamic payload and W_TX_PAYLOAD_NOACK command*/
+    nrf24_write_register(FEATURE_REG, (_BV(EN_DPL) | _BV(EN_DYN_ACK)));
 
-    /* Static radio setup. */
-    //nrf24_hal_set_data_rate(NRF24_LL_HAL_DATARATE);
+    /*enable dynamic payload in all pipes*/
+    nrf24_write_register(DYNAMIC_PAYLOAD_ENABLE_REG, 0x3F);
+
+    /*set address width defined in config file*/
+    nrf24_write_register(SETUP_ADDRESS_WIDTH_REG, NRF24_LL_ADDRESS_WIDTH - 2);
+
+    /*set default channel*/
+    nrf24_write_register(RF_CHANNEL_REG, NRF24_LL_DEFAULT_CHANNEL);
+
+    /* set data rate and the output power*/
+    nrf24_write_register(RF_SETUP_REG, (NRF24_LL_HAL_DATARATE | ((uint8_t) g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER])));
+
+    /* set CRC length */
     nrf24_hal_set_crc_length(NRF24_LL_CRC);
-    //nrf24_hal_set_address_width(NRF24_LL_ADDRESS_WIDTH);
 
     nrf24_link_set_pan_id(g_inst.pan_id);
     nrf24_link_set_nwk_id(g_inst.nwk_id);
@@ -87,18 +94,12 @@ void nrf24_link_init(void)
     nrf24_hal_set_address_for_pipe(NRF24_HAL_PIPE_1, &temp_address[0]);
 
     /* Set up default output power. */
-    //nrf24_hal_set_rf_output_power((nrf24_hal_rf_output_power_t) g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER]);
-
-    // Set up default configuration.  Callers can always change it later.
-    // This channel should be universally safe and not bleed over into adjacent spectrum.
-    //nrf24_hal_set_channel(NRF24_LL_DEFAULT_CHANNEL);
-
     nrf24_hal_get_clear_irq_flags();
 
     nrf24_hal_flush_rx_fifo();
     nrf24_hal_flush_tx_fifo();
 
-    if(g_inst.gzll_dyn_params[NRF24_LL_PARAM_POWER_DOWN_IDLE_ENABLE] != 1) {
+    if(g_inst.gzll_dyn_params[NRF24_LL_PARAM_ENABLE_POWER_DOWN_IDLE] != 1) {
         g_inst.state = GZLL_SYSTEM_STATE_STANDBY_I;
     }
 }
@@ -111,7 +112,7 @@ void nrf24_link_set_param(gzll_dyn_params_t   param,
 
         switch(param)
         {
-            case NRF24_LL_PARAM_POWER_DOWN_IDLE_ENABLE:
+            case NRF24_LL_PARAM_ENABLE_POWER_DOWN_IDLE:
                 if(val == 1) {
                     nrf24_hal_power_up();
                     g_inst.state = GZLL_SYSTEM_STATE_POWER_DOWN;
@@ -119,8 +120,7 @@ void nrf24_link_set_param(gzll_dyn_params_t   param,
                 break;
 
             case NRF24_LL_PARAM_OUTPUT_POWER:
-                nrf24_intl_write_register(RF_SETUP_REG, (NRF24_LL_HAL_DATARATE | ((uint8_t) g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER]) ));
-                //nrf24_hal_set_rf_output_power((nrf24_hal_rf_output_power_t) g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER]);
+                nrf24_write_register(RF_SETUP_REG, (NRF24_LL_HAL_DATARATE | ((uint8_t) g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER])));
                 break;
 
             default:
@@ -141,9 +141,8 @@ uint16_t nrf24_link_get_param(gzll_dyn_params_t   param)
     if(param < NRF24_LL_DYN_PARAM_SIZE) {
         return g_inst.gzll_dyn_params[param];
     }
-    else {
-        return 0;
-    }
+
+    return 0;
 }
 
 void nrf24_link_set_pan_id(uint16_t    pan_id)
@@ -234,18 +233,17 @@ void nrf24_link_rx_start(void)
     }
     else if(g_inst.state == GZLL_SYSTEM_STATE_POWER_DOWN) {
         nrf24_hal_power_up();           // after this it moves to standby-I mode
-        nrf24_hal_chip_enable_low();    // after this it moves to standby-I mode
     }
-    else if(g_inst.state == GZLL_SYSTEM_STATE_TX) {
-        nrf24_hal_chip_enable_low();    // after this it moves to standby-I mode
-    }
+
+    CE_LOW();        // after this it moves to standby-I mode
 
     /* Restore pipe 0 address (this may have been altered during transmission) */
     nrf24_link_intl_set_addr(NRF24_HAL_PIPE_0, g_inst.pan_id, g_inst.nwk_id);
 
-    /* Enable the receive pipes selected by gzll_set_param() */
+    /* close all pipes*/
     nrf24_hal_close_pipe(NRF24_HAL_PIPE_ALL);
 
+    /* Enable the receive pipes selected by gzll_set_param() */
     for(i = 0; i < 6; i++) {
         if(g_inst.gzll_dyn_params[NRF24_LL_PARAM_RX_PIPES] & (1 << i)) {
             nrf24_hal_open_pipe((nrf24_hal_pipe_t) i, 1);
@@ -253,7 +251,7 @@ void nrf24_link_rx_start(void)
     }
 
     nrf24_hal_set_operation_mode(NRF24_HAL_OP_MODE_RX);
-    nrf24_hal_chip_enable_high();
+    CE_HIGH();
     nrf24_port_delay_us(130);
 
     g_inst.state = GZLL_SYSTEM_STATE_RX;
@@ -275,11 +273,11 @@ uint8_t nrf24_link_tx_data(uint16_t        pan_id,
     }
 
     if(g_inst.state == GZLL_SYSTEM_STATE_POWER_DOWN) {
-        nrf24_hal_chip_enable_low();    // after this it moves to standby-I mode
+        CE_LOW();    // after this it moves to standby-I mode
         nrf24_hal_power_up();           // after this it moves to standby-I mode
     }
     else if(g_inst.state == GZLL_SYSTEM_STATE_RX) {
-        nrf24_hal_chip_enable_low();    // after this it moves to standby-I mode
+        CE_LOW();    // after this it moves to standby-I mode
     }
 
     nrf24_link_intl_set_addr(NRF24_HAL_PIPE_0, pan_id, nwk_id);
@@ -299,18 +297,15 @@ uint8_t nrf24_link_tx_data(uint16_t        pan_id,
         nrf24_hal_write_tx_payload(src, length);
     }
 
-    nrf24_hal_chip_enable_high();
-
-    //nrf24_hal_chip_enable_pulse();
-    nrf24_port_delay_us(130);
+    CE_HIGH();
 
     g_inst.state = GZLL_SYSTEM_STATE_TX;
 
     success = nrf24_link_intl_wait_for_tx_complete(timeout_ms);
-    
-    nrf24_hal_chip_enable_low();
+
+    CE_LOW();
     nrf24_link_rx_start();
-    
+
     return success;
 }
 
@@ -324,51 +319,45 @@ static uint8_t nrf24_link_intl_wait_for_tx_complete(uint16_t    timeout_ms)
     uint8_t     status;
     uint8_t     success = 0;
     uint32_t    start_time_ms;
-    uint8_t     current_retry_count = 0;
+    uint16_t    current_retry_count = g_inst.gzll_dyn_params[NRF24_LL_PARAM_TX_ATTEMPTS];
 
-    start_time_ms = nrf24_port_current_time_ms();
-    status = nrf24_hal_get_irq_flags();
+	start_time_ms = nrf24_port_current_time_ms();
 
-    printf_P(PSTR("status %d\n"), status);
-    current_retry_count -= (nrf24_hal_get_current_auto_retransmit_count() + 1);
-    printf_P(PSTR("arc %d\n"), current_retry_count);
-
-    while((status & (_BV(MAX_RT) | _BV(TX_DS))) == 0) {
-        if(status & _BV(TX_DS)) {
-            printf_P(PSTR("data sent\n"));
+    while(1) {
+        if((timeout_ms != 0xFFFF) && ((nrf24_port_current_time_ms() - start_time_ms) > timeout_ms)) {
+            success = 1;
             break;
         }
 
-        if(status & _BV(MAX_RT)) {
-            if((timeout_ms != 0xFFFF) && ((nrf24_port_current_time_ms() - start_time_ms) > timeout_ms)) {
-                success = 1;
+        status = nrf24_hal_get_irq_flags();
+
+        if((status & _BV(TX_DS)) != 0) {
+            success = 0;
+            break;
+        }
+
+        if((status & _BV(MAX_RT)) != 0) {
+            printf_P(PSTR("max rt\n"));
+
+            current_retry_count -= (nrf24_hal_get_current_auto_retransmit_count() + 1);
+
+            if(current_retry_count <= 0) {
+                success = 2;
                 break;
             }
             else {
-                current_retry_count -= (nrf24_hal_get_current_auto_retransmit_count() + 1);
-                printf_P(PSTR("arc %d\n"), current_retry_count);
-
-                // If tries per channel has elapsed
-                if(current_retry_count <= 0) {
-                    success = 2;
-                    break;
-                }
-                else {
-                    printf_P(PSTR("resend arc %d\n"), current_retry_count);
-                    nrf24_hal_clear_irq_flag(NRF24_HAL_IRQ_MAX_RT);
-                    nrf24_link_intl_set_radio_auto_retries(current_retry_count);    // Continue retransmits on same channel
-                    nrf24_hal_chip_enable_pulse();
-                }
+                printf_P(PSTR("resend arc %d\n"), current_retry_count);
+                nrf24_hal_clear_irq_flag(NRF24_HAL_IRQ_MAX_RT);
+                nrf24_link_intl_set_radio_auto_retries(current_retry_count);        // Continue retransmits on same channel
+                nrf24_hal_chip_enable_pulse();
             }
         }
-
-        status = nrf24_hal_get_irq_flags();
-        //printf_P(PSTR("status %d\n"), status);
     }
 
     nrf24_hal_clear_irq_flag(NRF24_HAL_IRQ_TX_DS);
     nrf24_hal_clear_irq_flag(NRF24_HAL_IRQ_MAX_RT);
 
+    printf_P(PSTR("success %d\n"), success);
     return success;
 }
 
@@ -378,11 +367,16 @@ static void nrf24_link_intl_set_radio_auto_retries(uint8_t current_retry_count)
     nrf24_hal_set_auto_retransmit_delay(NRF24_LL_AUTO_RETR_DELAY);
 }
 
+nrf24_port_radio_isr_function()
+{
+
+}
+
 static void nrf24_link_intl_set_default_params(void)
 {
     g_inst.gzll_dyn_params[NRF24_LL_PARAM_TX_ATTEMPTS] = NRF24_LL_DEFAULT_PARAM_TX_ATTEMPTS;
     g_inst.gzll_dyn_params[NRF24_LL_PARAM_RX_PIPES] = NRF24_LL_DEFAULT_PARAM_RX_PIPES;
     g_inst.gzll_dyn_params[NRF24_LL_PARAM_CRYPT_PIPES] = NRF24_LL_DEFAULT_PARAM_CRYPT_PIPES;
     g_inst.gzll_dyn_params[NRF24_LL_PARAM_OUTPUT_POWER] = NRF24_LL_DEFAULT_PARAM_OUTPUT_POWER;
-    g_inst.gzll_dyn_params[NRF24_LL_PARAM_POWER_DOWN_IDLE_ENABLE] = NRF24_LL_DEFAULT_PARAM_POWER_DOWN_IDLE_ENABLE;
+    g_inst.gzll_dyn_params[NRF24_LL_PARAM_ENABLE_POWER_DOWN_IDLE] = NRF24_LL_DEFAULT_PARAM_POWER_DOWN_IDLE_ENABLE;
 }

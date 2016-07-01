@@ -121,9 +121,9 @@ Used for calculating host mode 1 burst behavior.
 #endif /*NRF24_LL_CRYPT_ENABLE*/
 
 /*Final list of defines
-1. NRF24_LL_MAX_FW_PAYLOAD_LENGTH
-2. NRF24_LL_MAX_ACK_PAYLOAD_LENGTH
-3. NRF24_LL_MAX_PAYLOAD_LENGTH
+1. NRF24_LL_MAX_FW_PAYLOAD_LENGTH               Max forward payload
+2. NRF24_LL_MAX_ACK_PAYLOAD_LENGTH             Max ack payload
+3. NRF24_LL_MAX_PAYLOAD_LENGTH                     Max payload
 4. NRF24_LL_US_PER_BYTE
 5. NRF24_LL_HAL_DATARATE
 6. NRF24_LL_HOST_CE_LOW_IDLE_DELAY
