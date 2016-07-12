@@ -2,7 +2,7 @@
 * nrf_rfd_node_v1.c
 *
 * Created: 19-03-2016 18:56:35
-* Author : prabhu
+* Author : Prabhu Sammandam
 */
 #include <stdio.h>
 #include <avr/io.h>
@@ -25,16 +25,19 @@
 #include "nrf24_params.h"
 #include "gpio/gpio.h"
 
-#define TRANSMITTER
-#define RECEIVER
-
 #define IS_BIT_CLEAR(_V_, _B_)  ((_V_ & (_BV(_B_))) == 0)
 #define IS_BIT_SET(_V_, _B_)    ((_V_ & (_BV(_B_))) != 0)
 
 static int  uart_putchar(char c, FILE* stream);
 static void init_debug_prints(void);
+
+#ifdef TRANSMITTER
 static void run_as_transmitter(void);
+#endif
+
+#ifdef RECEIVER
 static void run_as_receiver(void);
+#endif
 
 #define LED_GREEN       IOPORT_CREATE_PIN(PORT_D, 3)
 #define RELAY_PIN       IOPORT_CREATE_PIN(PORT_D, 4)
@@ -83,22 +86,20 @@ uint8_t get_key(void)
 
 int main(void)
 {
-
     board_init();
 
 #ifdef TRANSMITTER
     run_as_transmitter();
-
 #else
     run_as_receiver();
 #endif
 }
 
+#ifdef TRANSMITTER
 static void run_as_transmitter(void)
 {
     uint8_t led_display_count = 0;
-    uint8_t count = 0;
-    uint8_t status;
+    uint8_t key_code = 0;
 
     gpio_set_pin_input(SWITCH_ON_PIN);
     gpio_set_pin_input(SWITCH_OFF_PIN);
@@ -110,36 +111,21 @@ static void run_as_transmitter(void)
     nrf24_link_set_pan_id(0x0001);
     nrf24_link_set_nwk_id(0x0001);
 
-    count = 0xFF;
+    key_code = 0xFF;
     nrf24_hal_print_details(1);
 
     while(1)
     {
-#if 0
-        if(uart_available()) {
-            uint8_t ch = uart_getc() & 0xFF;
+        key_code = get_key();
 
-            if(ch == '0') {
-                count = 0;
-                printf_P(PSTR("relay off\n"));
-            }
-            else if(ch == '1') {
-                count = 1;
-                printf_P(PSTR("relay on\n"));
-            }
-        }
-#endif
-
-        count = get_key();
-
-        if(count != 0xFF) {
-            uint8_t success = nrf24_link_tx_data(0x0001, 0x0002, &count, sizeof(uint8_t), NRF24_LL_UNICAST, NRF24_LL_NO_TIMEOUT);
+        if(key_code != 0xFF) {
+            uint8_t success = nrf24_link_tx_data(0x0001, 0x0002, &key_code, sizeof(uint8_t), NRF24_LL_UNICAST, NRF24_LL_NO_TIMEOUT);
 
             if(!success) {
-                printf_P(PSTR("ds, count %d\n"), count);
+                printf_P(PSTR("COMMAND sent[%d]\n"), key_code);
             }
 
-            count = 0xFF;
+            key_code = 0xFF;
         }
 
         delay_ms(1);
@@ -152,53 +138,35 @@ static void run_as_transmitter(void)
         }
     }
 }
+#endif
 
+
+#ifdef RECEIVER
 static void run_as_receiver(void)
 {
-    uint8_t led_display_count = 0;
-    uint8_t count = 0;
-    uint8_t status;
+    uint8_t command = 0;
 
     gpio_set_pin_output(RELAY_PIN);
     gpio_set_pin_low(RELAY_PIN);
 
     nrf24_link_set_pan_id(0x0001);
     nrf24_link_set_nwk_id(0x0002);
-
     nrf24_link_rx_start();
-
-    //CE_HIGH();
     nrf24_hal_print_details(1);
 
     while(1) {
         if(!nrf24_hal_is_rx_fifo_empty()) {
             nrf24_write_register(STATUS_REG, (_BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT)));
 
-            //nrf24_hal_flush_rx_fifo();
-            nrf24_hal_read_rx_payload(&count);
-            printf_P(PSTR("data received %d\n"), count);
+            nrf24_hal_read_rx_payload(&command);
 
-            if(count == 0) {
-                gpio_set_pin_low(RELAY_PIN);
-            }
-            else if(count == 1) {
-                gpio_set_pin_high(RELAY_PIN);
-            }
+            printf_P(PSTR("COMMAND received %d\n"), command);
+
+            gpio_set_pin(RELAY_PIN, command);
         }
-
-#if 0
-        delay_ms(1);
-        led_display_count++;
-
-        if(led_display_count > 200) {
-            led_display_count = 0;
-            gpio_toggle_pin(LED_GREEN);
-        }
-#endif
-
-        //gpio_toggle_pin(RELAY_PIN);
     }
 }
+#endif
 
 static int uart_putchar(char    c,
                         FILE*   stream)

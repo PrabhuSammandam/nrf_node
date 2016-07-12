@@ -93,7 +93,6 @@ void nrf24_link_init(void)
 
     nrf24_hal_set_address_for_pipe(NRF24_HAL_PIPE_1, &temp_address[0]);
 
-    /* Set up default output power. */
     nrf24_hal_get_clear_irq_flags();
 
     nrf24_hal_flush_rx_fifo();
@@ -273,8 +272,8 @@ uint8_t nrf24_link_tx_data(uint16_t        pan_id,
     }
 
     if(g_inst.state == GZLL_SYSTEM_STATE_POWER_DOWN) {
-        CE_LOW();    // after this it moves to standby-I mode
-        nrf24_hal_power_up();           // after this it moves to standby-I mode
+        CE_LOW();             
+        nrf24_hal_power_up(); // after this it moves to standby-I mode
     }
     else if(g_inst.state == GZLL_SYSTEM_STATE_RX) {
         CE_LOW();    // after this it moves to standby-I mode
@@ -364,12 +363,29 @@ static uint8_t nrf24_link_intl_wait_for_tx_complete(uint16_t    timeout_ms)
 static void nrf24_link_intl_set_radio_auto_retries(uint8_t current_retry_count)
 {
     nrf24_hal_set_auto_retransmit_count((current_retry_count > 15) ? 15 : current_retry_count - 1);
-    nrf24_hal_set_auto_retransmit_delay(NRF24_LL_AUTO_RETR_DELAY);
+    nrf24_hal_set_auto_retransmit_delay(((uint16_t)NRF24_LL_AUTO_RETR_DELAY) >> 8);
 }
 
-nrf24_port_radio_isr_function()
+void nrf24_port_radio_isr_function()
 {
+	uint8_t status;
 
+	status = nrf24_hal_get_clear_irq_flags();
+
+	/*received some packet*/
+	if((status & _BV(RX_DR)))
+	{
+	}
+
+	/*transmitted the packet*/
+	if((status & _BV(TX_DS)))
+	{
+	}
+
+	/*transmission failed*/
+	if((status & _BV(MAX_RT)))
+	{
+	}
 }
 
 static void nrf24_link_intl_set_default_params(void)

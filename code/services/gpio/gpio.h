@@ -23,6 +23,7 @@
 #define gpio_set_pin_high(x) do { io_port_set_pin_high(x); } while(0);
 #define gpio_set_pin_low(x) do { io_port_set_pin_low(x); } while(0);
 #define gpio_toggle_pin(x) do { io_port_toggle_pin(x); } while(0);
+#define gpio_set_pin(_PIN_,_VAL_) do { io_port_set_pin(_PIN_,_VAL_); } while(0);
 
 /************************************************************************/
 /*  IN PIN manipulation api's                                                                     */

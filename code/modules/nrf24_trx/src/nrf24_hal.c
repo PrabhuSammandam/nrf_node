@@ -107,12 +107,6 @@ __always_inline static inline uint8_t   is_bit_set(uint8_t reg, uint8_t bit);
 
 /****************************PRIVATE FUNCTIONS*********************************************/
 
-uint8_t config;
-uint8_t en_rxaddr;
-uint8_t setup_retr;
-uint8_t rf_setup;
-
-
 uint8_t nrf24_read_register(uint8_t reg)
 {
     uint8_t result;

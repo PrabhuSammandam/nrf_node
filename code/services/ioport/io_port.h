@@ -70,6 +70,18 @@ __always_inline void io_port_set_pin_low(uint8_t pin)
     *port_output_reg &= ~IO_PORT_PIN_MASK(pin);
 }
 
+__always_inline void io_port_set_pin(uint8_t pin, bool value)
+{
+    volatile uint8_t*   port_output_reg = io_port_id_to_output_base(pin >> 3);
+
+    if (value == true)    {
+        *port_output_reg |= IO_PORT_PIN_MASK(pin);
+    }
+    else {
+    *port_output_reg &= ~IO_PORT_PIN_MASK(pin);
+    }
+}
+
 __always_inline void io_port_toggle_pin(uint8_t pin)
 {
     volatile uint8_t*   port_output_reg = io_port_id_to_output_base(pin >> 3);
